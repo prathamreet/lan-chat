@@ -1,43 +1,47 @@
 const WebSocket = require("ws");
-const os = require("os");
+const bonjour = require("bonjour")();
+const readline = require("readline");
 
-// Function to get the local IP address
-function getLocalIP() {
-    const interfaces = os.networkInterfaces();
-    for (const iface of Object.values(interfaces)) {
-        for (const config of iface) {
-            if (config.family === "IPv4" && !config.internal) {
-                return config.address;
+// Create a readline interface for terminal input
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+// Auto-discover WebSocket server
+bonjour.find({ type: "ws" }, (service) => {
+    const serverIp = service.referer.address;
+    console.log(`✅ Found server at ws://${serverIp}:8080`);
+
+    const ws = new WebSocket(`ws://${serverIp}:8080`);
+
+    ws.on("open", () => {
+        console.log("🔗 Connected to server! Type a message and press Enter to send.");
+
+        // Start interactive chat
+        rl.on("line", (message) => {
+            if (message.toLowerCase() === "exit") {
+                console.log("🔴 Closing connection...");
+                ws.close();
+                rl.close();
+                return;
             }
-        }
-    }
-    return "127.0.0.1"; // Fallback to localhost
-}
+            ws.send(message);
+        });
+    });
 
-const SERVER_IP = getLocalIP();
-const SERVER_URL = `ws://${SERVER_IP}:8080`;
+    ws.on("message", (data) => {
+        const message = data.toString();
+        readline.clearLine(process.stdout, 0); // Clear input line
+        readline.cursorTo(process.stdout, 0);  // Move cursor to start
+        console.log(`📩 ${message}`);
+        rl.prompt(true); // Restore prompt
+    });
 
-const peerName = "Electro"; // Set your name
-const systemName = os.hostname(); // Get system name
+    ws.on("close", () => {
+        console.log("🔴 Disconnected from server");
+        rl.close();
+    });
 
-
-console.log(`🔗 Connecting to ${SERVER_URL}...`);
-const socket = new WebSocket(SERVER_URL);
-
-socket.on("open", () => {
-    console.log("✅ Connected to server");
-    socket.send(`PEER_UPDATE|${peerName}|${systemName}`);
-});
-
-socket.on("message", (msg) => {
-    console.log("📩 Server:", msg.toString());
-});
-
-socket.on("close", () => {
-    console.log("❌ Disconnected from server");
-});
-
-// **Send test message from terminal**
-process.stdin.on("data", (data) => {
-    socket.send(data.toString().trim());
+    ws.on("error", (err) => console.error("❌ Connection error:", err));
 });
