@@ -1,47 +1,65 @@
 const WebSocket = require("ws");
+const os = require("os");
 const bonjour = require("bonjour")();
 const readline = require("readline");
 
-// Create a readline interface for terminal input
+let ws;
+let username;
+
+// Create a readline interface for user input
 const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
 });
 
-// Auto-discover WebSocket server
-bonjour.find({ type: "ws" }, (service) => {
-    const serverIp = service.referer.address;
-    console.log(`✅ Found server at ws://${serverIp}:8080`);
+// Prompt user for a username
+rl.question("Enter your username: ", (name) => {
+    username = name.trim() || `Guest-${Math.floor(Math.random() * 1000)}`;
+    connectToServer();
+});
 
-    const ws = new WebSocket(`ws://${serverIp}:8080`);
+function connectToServer() {
+    // Discover WebSocket server using Bonjour
+    bonjour.find({ type: "ws" }, (service) => {
+        console.log(`✅ Found server at ws://${service.referer.address}:${service.port}`);
+        ws = new WebSocket(`ws://${service.referer.address}:${service.port}`);
 
-    ws.on("open", () => {
-        console.log("🔗 Connected to server! Type a message and press Enter to send.");
+        ws.on("open", () => {
+            console.log("🔗 Connected to the chat server!");
+            ws.send(JSON.stringify({
+                type: "userDetails",
+                username,
+                device: os.hostname(), // Send device name
+            }));
 
-        // Start interactive chat
-        rl.on("line", (message) => {
-            if (message.toLowerCase() === "exit") {
-                console.log("🔴 Closing connection...");
-                ws.close();
-                rl.close();
-                return;
+            // Start reading messages
+            startChat();
+        });
+
+        ws.on("message", (data) => {
+            try {
+                const msg = JSON.parse(data);
+                if (msg.type !== "requestDetails") {
+                    console.log(`📩 ${msg.sender}: ${msg.message}`);
+                }
+            } catch (error) {
+                console.error("❌ Error parsing message:", error);
             }
-            ws.send(message);
+        });
+
+        ws.on("close", () => {
+            console.log("❌ Disconnected from server.");
+            rl.close();
         });
     });
+}
 
-    ws.on("message", (data) => {
-        const message = data.toString();
-        readline.clearLine(process.stdout, 0); // Clear input line
-        readline.cursorTo(process.stdout, 0);  // Move cursor to start
-        console.log(`📩 ${message}`);
-        rl.prompt(true); // Restore prompt
+// Function to handle user input and send messages
+function startChat() {
+    rl.on("line", (input) => {
+        const message = input.trim();
+        if (message && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "message", text: message }));
+        }
     });
-
-    ws.on("close", () => {
-        console.log("🔴 Disconnected from server");
-        rl.close();
-    });
-
-    ws.on("error", (err) => console.error("❌ Connection error:", err));
-});
+}
