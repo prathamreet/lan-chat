@@ -1,0 +1,19 @@
+{
+  "name": "lan-chat",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "concurrently \"node server/server.js\" \"node client/client.js\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dgram": "^1.0.1",
+    "multicast-dns": "^7.2.5",
+    "os": "^0.1.2",
+    "ws": "^8.18.1"
+  }
+}
