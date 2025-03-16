@@ -1,32 +1,26 @@
 const WebSocket = require("ws");
-const readline = require("readline");
+const os = require("os");
 
-// Replace with your LAN IP if needed
-const ws = new WebSocket("ws://10.151.22.104:8080");
+const SERVER_URL = "ws://localhost:8080";
+const socket = new WebSocket(SERVER_URL);
 
-ws.onopen = () => {
-    console.log("✅ Connected to WebSocket server");
+const peerName = "Electro"; // Set your name
+const systemName = os.hostname(); // Get system name
 
-    // Allow user to type messages in terminal
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+socket.on("open", () => {
+    console.log("✅ Connected to server");
+    socket.send(`PEER_UPDATE|${peerName}|${systemName}`);
+});
 
-    rl.setPrompt("💬 Enter message: ");
-    rl.prompt();
+socket.on("message", (msg) => {
+    console.log("📩 Server:", msg.toString());
+});
 
-    rl.on("line", (message) => {
-        ws.send(message);
-        console.log("📤 Sent:", message);
-        rl.prompt();
-    });
+socket.on("close", () => {
+    console.log("❌ Disconnected from server");
+});
 
-    ws.onclose = () => {
-        console.log("🔴 Connection closed");
-        rl.close();
-    };
-};
-
-ws.onmessage = (msg) => console.log("📩 Message received:", msg.data.toString());
-ws.onerror = (err) => console.log("❌ WebSocket Error:", err);
+// **Send test message from terminal**
+process.stdin.on("data", (data) => {
+    socket.send(data.toString().trim());
+});
